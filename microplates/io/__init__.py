@@ -5,11 +5,14 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
     """Reads data for one or more plates, then merges the data together.
 
     This function simplifies reading and data reduction where you have either
-        (1) multiple plates, each containing separate samples, and/or
-        (2) each sample has multiple parameters measured (e.g OD600, A450, etc).
+
+    1. multiple plates, each containing separate samples, and/or
+    2. each sample has multiple parameters measured (e.g OD600, A450, etc).
+
     This function produces a `DataFrame` where each such `measure` (e.g. OD600, FITC,
     A450, etc.) is in a separate column, and each physical well is in a single
     row.
+
     For each entry in `table`, this function reads each of the `measures` in
     that table and joins those measures horizontally (one measure per column);
     then it concatenates `table`s vertically, such that there is one row per well.
@@ -21,15 +24,21 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
 
     Each `table` can have several keys which serve special functions. Other
     keys will be passed as `kwargs` to `read_single` as above
-    - `measures`
-    - `platemap`: dict containing platemap metadata that will be passed to `platemap_to_dataframe`. 
+    * `measures`
+    * `platemap`: dict containing platemap metadata that will be passed to
+      `platemap_to_dataframe`. The metadata from the `platemap` argument and
+      this key will be merged
+    * transform: function that will be called with the DataFrame and `table`,
+      and should return a new DataFrame
+    * convert: tuple `(from_wells, to_wells)`; will be used to
 
     Examples
     --------
 
-    # each measure is in a separate spreadsheet
+    # single plate, multiple measures (OD600, FITC), each measure is in a
+    # separate tab of the spreadsheet
     >>> read_multiple_plates([
-    ...     { io: 'plate1.xlsx', 'measures': [
+    ...     { 'io': 'plate1.xlsx', 'measures': [
     ...      { 'sheet_name':'OD600', 'measure':'OD600' },
     ...      { 'sheet_name':'FITC',  'measure':'FITC' }
     ...     ]}
@@ -37,21 +46,30 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
 
     # multiple plates, in separate excel files
     >>> read_multiple_plates([
-    ...     { io: 'plate1.xlsx', 'measure':'OD600', 'data': {'plate':1} },
-    ...     { io: 'plate2.xlsx', 'measure':'OD600', 'data': {'plate':2} }
+    ...     { 'io': 'plate1.xlsx', 'measure':'OD600', 'data': {'plate':1} },
+    ...     { 'io': 'plate2.xlsx', 'measure':'OD600', 'data': {'plate':2} }
     ... ], read_single = pd.read_excel )
 
-
-    # multiple plates in same excel file
+    # multiple plates in different tabs of the same excel file
     >>> read_multiple_plates([
     ...     { 'sheet_name': 'plate1', 'measure':'OD600', 'data': {'plate':1} },
     ...     { 'sheet_name': 'plate2', 'measure':'OD600', 'data': {'plate':2} }
     ... ], read_single = pd.read_excel, io='plates.xlsx', measure='OD600' )
 
+    # multiple plates in same excel file; can read using a function from
+    # a submodule of microplates.io:
+    >>> read_multiple_plates([
+    ...         { 'sheet_name': 'plate1', 'measure':'OD600', 'data': {'plate':1} },
+    ...         { 'sheet_name': 'plate2', 'measure':'OD600', 'data': {'plate':2} }
+    ...     ],
+    ...     read_single=microplates.io.tecan.read_single,
+    ...     path='plates.xlsx', measure='OD600' )
+
+
     Parameters
     ----------
     tables : list of dicts
-        See example.
+        See examples
     read_single : function
         Function to read a single plate. Generally will be a function from
         the `io` submodule. The values for a single `measure` or `table` will

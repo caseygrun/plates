@@ -6,8 +6,8 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     (`spec`) encoding that platemap. The `spec` can then be joined to a tidy
     dataframe to attach metadata to the plate.
 
-    Program format tutorial
-    -----------------------
+    Notes
+    -----
 
     Each program is of this form:
 
@@ -31,7 +31,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
 
     The resulting dataframe would have column for each of the variables (`strain`, `drug`,
     and `concentration`), in addition to `well`. There would be 1 row for each well in the
-    96-well plate, like this:
+    96-well plate, like this::
 
             strain        drug  concentration
         A1    PAO1  ampicillin            0.0
@@ -51,7 +51,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     spooled while `strain` and `drug` were not).
 
     You can apply the same set of values to multiple ranges by separating the two ranges with
-    a comma:
+    a comma::
 
         {
             'A1:A3,B5:B7': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration' [[0, 10, 100]] }
@@ -60,7 +60,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
 
     Note that spooling applies to each range *indepdendently*; this means in the example above,
     the `concentration` of `A1` = `concentration` of `B5` = 0, `concentration` of `A2` =
-    `concentration` of `B6` = 10, and so on. On the other hand, if you did this,
+    `concentration` of `B6` = 10, and so on. On the other hand, if you did this, ::
 
         {
             'A1:A3,B5': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration' [[0, 10, 100]] }
@@ -70,7 +70,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     `concentration` would spool across `A1:A3`, but `B5` would be assigned a concentration of
     `[[0, 10, 100]]`... probably not what you wanted.
 
-    If you wanted to use a different plate shape, just add a `well` key:
+    If you wanted to use a different plate shape, just add a `well` key::
 
         {
             "A1:A3": { 'strain': 'PAO1' },
@@ -78,7 +78,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
         }
 
     Wells not appearing in the platemap have values of NaN for all columns. You can
-    easily throw away extra wells that are not in the platemap using `dropna`:
+    easily throw away extra wells that are not in the platemap using `dropna`::
 
         >>> platemap_to_dataframe({'A1:A3': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }}).dropna()
            strain        drug  concentration
@@ -92,23 +92,23 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
         Program describing the platemap.
 
         each key should be a *range* of wells, in any of these forms:
-            - single well (e.g. `A1`)
-            - rectangular range of specific wells (`A1:B6`)
-            - range of entire columns or entire rows (e.g. `A:A` = `A1`, `A2`, `A3`,
-            etc.; `1:6` = all of columns `1`, `2`, ... `6` etc.)
+            - single well (e.g. ``A1``)
+            - rectangular range of specific wells (``A1:B6``)
+            - range of entire columns or entire rows (e.g. ``A:A`` = ``A1``, ``A2``, ``A3``,
+            etc.; ``1:6`` = all of columns ``1``, ``2``, ... ``6`` etc.)
             - a comma-separated series of ranges (`A:B,E:F`, etc.)
 
-        each value should be a `dict` containing variables to assign to that
-        range of wells. Each key will be a column in the output DataFrame. If
-        a value is `array_like` and the same shape as the range, then each well
-        in the range will be assigned a matching element of the `array_like`
-        value. See tutorial and examples.
+        each value should be a ``dict`` containing variables to assign to that
+        range of wells. For that range, each key will be a column in the output
+        DataFrame. If a value is `array_like` and the same shape as the range,
+        then each well in the range will be assigned a matching element of the
+        `array_like` value. See tutorial and examples.
 
-        One special key "wells" may be used to set the number of
+        One special key ``"wells"`` may be used to set the number of
         wells in the plate (e.g. 96, 384, etc.).
     index : None
     include_row_column : bool
-        True to include columns named `row` and `column` in the resulting
+        ``True`` to include columns named ``row`` and ``column`` in the resulting
         data frame, corresponding to the 0-indexed row/column in the original
         microtiter plate
 
@@ -316,15 +316,17 @@ def cherrypick(pick_wells, values={'Pick':True}, others = {}, wells=96):
     return df
 
 
+
+
 def fortify_plate(df, inplace=False):
     """Find the column of a microplate DataFrame indicating the wells and move it to the index
 
     Searches the following in order:
-    - If the index is named `well` or `wells` (case insensitive),
+    * If the index is named `well` or `wells` (case insensitive),
       it is renamed to `well`
-    - If all element of the index look like well names (e.g. `A1`), index is
+    * If all element of the index look like well names (e.g. `A1`), index is
       renamed `well`
-    - If there is a column named `well` or `wells` (case insensitive), it is
+    * If there is a column named `well` or `wells` (case insensitive), it is
       made the index and renamed `well`
     """
     names = ['well', 'wells']
@@ -427,8 +429,6 @@ def add_row_column(df, well_variable='well',
     if plate_col_variable is not None:
         df[plate_col_variable] = df[well_variable].astype(str).apply(col_mapper)
     return df
-
-
 
 
 def combine_plate_dataframes(
@@ -536,25 +536,29 @@ def scale_plate(spec,from_wells,to_wells,include_row_column=True):
     Converts a tidy plate dataframe from a `from_wells`-sized plate to a
     `to_wells`-sized plate. For example, you could map data from a 24-well plate
 
-    |       | 1  | 2  | 3  | 4  | 5  | 6  |
-    |-------|----|----|----|----|----|----|
-    | **A** |  1 |  2 |  3 |  4 |  5 |  6 |
-    | **B** |  7 |  8 |  9 | 10 | 11 | 12 |
-    | **C** | 13 | 14 | 15 | 16 | 17 | 18 |
-    | **D** | 19 | 20 | 21 | 22 | 23 | 24 |
+    ===== == == == == == ==
+    \\    1  2  3  4  5  6
+    ===== == == == == == ==
+    **A** 1  2  3  4  5  6
+    **B** 7  8  9  10 11 12
+    **C** 13 14 15 16 17 18
+    **D** 19 20 21 22 23 24
+    ===== == == == == == ==
 
     to a 96-well plate by copying each well to 4 wells:
 
-    |       | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9  | 10 | 11 | 12 |
-    |-------|----|----|----|----|----|----|----|----|----|----|----|----|
-    | **A** |  1 |  1 |  2 |  2 |  3 |  3 |  4 |  4 |  5 |  5 |  6 |  6 |
-    | **B** |  1 |  1 |  2 |  2 |  3 |  3 |  4 |  4 |  5 |  5 |  6 |  6 |
-    | **C** |  7 |  7 |  8 |  8 |  9 |  9 | 10 | 10 | 11 | 11 | 12 | 12 |
-    | **D** |  7 |  7 |  8 |  8 |  9 |  9 | 10 | 10 | 11 | 11 | 12 | 12 |
-    | **E** | 13 | 13 | 14 | 14 | 15 | 15 | 16 | 16 | 17 | 17 | 18 | 18 |
-    | **F** | 13 | 13 | 14 | 14 | 15 | 15 | 16 | 16 | 17 | 17 | 18 | 18 |
-    | **G** | 19 | 19 | 20 | 20 | 21 | 21 | 22 | 22 | 23 | 23 | 24 | 24 |
-    | **H** | 19 | 19 | 20 | 20 | 21 | 21 | 22 | 22 | 23 | 23 | 24 | 24 |
+    ===== == == == == == == == == == == == ==
+    \\    1  2  3  4  5  6  7  8  9  10 11 12
+    ===== == == == == == == == == == == == ==
+    **A** 1  1  2  2  3  3  4  4  5  5  6  6
+    **B** 1  1  2  2  3  3  4  4  5  5  6  6
+    **C** 7  7  8  8  9  9  10 10 11 11 12 12
+    **D** 7  7  8  8  9  9  10 10 11 11 12 12
+    **E** 13 13 14 14 15 15 16 16 17 17 18 18
+    **F** 13 13 14 14 15 15 16 16 17 17 18 18
+    **G** 19 19 20 20 21 21 22 22 23 23 24 24
+    **H** 19 19 20 20 21 21 22 22 23 23 24 24
+    ===== == == == == == == == == == == == ==
 
     The number of rows of a `to_wells`-sized plate must be an integer multiple
     of the number of rows in a `from_wells`-sized plate, and likewise for
@@ -601,9 +605,9 @@ def scale96to384(spec,**kwargs):
         microtiter plate.
 
         If there are already `row`/`column` columns and
-        - `include_row_column = False`, they will be deleted
-        - `include_row_column = True`, they will be replaced with values for
-        the 384-well plate
+        * `include_row_column = False`, they will be deleted
+        * `include_row_column = True`, they will be replaced with values for
+          the 384-well plate
 
     Returns
     -------
