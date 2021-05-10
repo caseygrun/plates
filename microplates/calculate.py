@@ -2,6 +2,8 @@ from __future__ import division
 import pandas as pd
 import numpy as np
 
+from inspect import signature
+
 
 def calc_norm(df, value='OD600', on='conc', columns=[], how=None):
     """
