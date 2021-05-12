@@ -12,17 +12,16 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'plates'
+NAME = 'microplates'
 DESCRIPTION = 'Generate tidy data from microplate data'
 URL = 'https://github.com/caseygrun/plates'
 EMAIL = 'casey.grun@yale.edu'
 AUTHOR = 'Casey Grun'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    # 'requests', 'maya', 'records',
     'numpy', 'pandas'
 ]
 
@@ -80,7 +79,7 @@ class UploadCommand(Command):
         self.status('Pushing git tags…')
         os.system('git tag v{0}'.format(about['__version__']))
         os.system('git push --tags')
-        
+
         sys.exit()
 
 

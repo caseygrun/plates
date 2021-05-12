@@ -1,7 +1,28 @@
-# plates
-Tidy data from microplate data
+# `microplates`
+Tidy data from microplate data.
 
-This package lets you process concise descriptions of [microplate](https://en.wikipedia.org/wiki/Microtiter_plate) map metadata into pandas `DataFrame`s; then you can join your dataset to the plate map to get a tidy dataset. 
+This package helps to read, process, and plot data and experiments in [microtiter plates](https://en.wikipedia.org/wiki/Microtiter_plate) as tidy pandas `DataFrame`s
+
+- **Read** (`microlates.io`): import data (e.g. OD600, fluorescence, etc.) from microplate readers, and convert to a **tidy format** (each row is an observation of one well; each column is a different variable, e.g. OD600, FITC, time, etc.)
+
+    | Well | OD600  | FITC  |
+    | ---- | ------ | ----- |
+    | A1   | 0.0102 | 0.975 |
+    | A2   | 0.0254 | 0.375 |
+    | A3   | 0.0321 | 0.002 |
+    | A4   | 0.0269 | 0.005 |
+
+- **Metadata** (`microplates.data`): describe layout of samples/conditions on the plate (drug, concentration, strain, etc.) in a compact format, get a tidy DataFrame; join this to your measurements, and you have a dataset of the entire experiment useful for downstream processing
+
+    | Well | OD600  | FITC  | Strain     | Induced |
+    | ---- | ------ | ----- | ---------- | ------- |
+    | A1   | 0.0102 | 0.975 | PAO1 sfGFP | True    |
+    | A2   | 0.0254 | 0.125 | PAO1 sfGFP | False   |
+    | A3   | 0.0321 | 0.002 | PAO1 WT    | True    |
+    | A4   | 0.0269 | 0.005 | PAO1 WT    | False   |
+
+- **Process** (`microplates.calculate`): subtract values of a negative control well, subtract value at the first timepoint, etc.
+- **Plot** (`microplates.plot`): visualize the measured data or metadata as it appears on the plate (to detect positional effects, verify your platemap, etc.)
 
 ## Examples
 
@@ -41,7 +62,7 @@ H12       NaN
 7   A2  0.051     3  B. theta
 ```
 
-```
+```ipython
 >>> plates.prog2spec({'A1:A2':{ 'strain': [['B. theta','C. diff']] }})
       strain
 A1   B. theta
