@@ -69,5 +69,9 @@ def test_iterwells():
     assert list(iterwells(9)) == ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9']
 
 def test_infer_plate_size():
-    assert infer_plate_size(['H12']) == infer_plate_size(['A1','H12']) == 96
+    assert infer_plate_size(['H12']) == infer_plate_size(['A1','H12']) == infer_plate_size(range2cell_list('A1:H12')) == 96
     assert infer_plate_size(['H13']) == 384
+    assert infer_plate_size(['A6'], all=True) == [24, 48, 96, 384, 1536]
+
+    assert infer_plate_size(['A6'], prefer=96) == 96
+    assert infer_plate_size(['A6'], prefer=384) == 384
