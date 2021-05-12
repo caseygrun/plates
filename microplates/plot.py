@@ -1,3 +1,7 @@
+"""
+Plot microplate data.
+"""
+
 import re
 import pandas as pd
 import numpy as np
@@ -5,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from .utils import *
+from .data import fortify_plate
 
 def parse_hue(values, order=None, palette=None):
     import seaborn as sns
@@ -43,8 +48,50 @@ def plot_plate(plate,labels=None,size=None,
                wells=96,
                ax=None,
                text_kwargs={},**kwargs):
+    """Plot microplate data on a microplate-shaped plot
+
+    Parameters
+    ----------
+    plate : pd.DataFrame
+        Tidy microplate data; the index should contain the well names, or there
+        should be a column named ``well`` or ``wells`` containing the well names.
+        Each row should be a distinct well.
+    wells : int, default=96
+        Shape of the microplate, or None to infer size from the
+    hue : str
+        Name of column to map to the hue channel
+    hue_order : str, optional
+        Order for the hue levels, defaults to the order in the plate
+    palette : str, optional
+        Colors to use for the different levels of the hue variable. Should be
+        something that can be interpreted by ``sns.color_palette``, or a
+        dictionary mapping hue levels to matplotlib colors.
+    text_kwargs : dict
+        Additional kwargs to pass to ``plt.text``
+
+    Returns
+    -------
+    int
+        Description of anonymous integer return value.
+
+    Examples
+    --------
+    >>> np.add(1, 2)
+    3
+
+    Comment explaining the second example.
+
+    >>> np.add([[1, 2], [3, 4]],
+    ...        [[5, 6], [7, 8]])
+    array([[ 6,  8],
+           [10, 12]])
+    """
     import numbers
 
+
+    plate = fortify_plate(plate)
+    if wells is None:
+        wells = infer_plate_size(plate.index)
 
     shape = plates[wells]
     xs = np.arange(shape[1])

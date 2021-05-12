@@ -1,4 +1,4 @@
-from ..data import prog2spec, convert_spec
+from ..data import platemap_to_dataframe, scale_plate
 import pandas as pd
 
 def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
@@ -9,28 +9,32 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
     1. multiple plates, each containing separate samples, and/or
     2. each sample has multiple parameters measured (e.g OD600, A450, etc).
 
-    This function produces a `DataFrame` where each such `measure` (e.g. OD600, FITC,
-    A450, etc.) is in a separate column, and each physical well is in a single
-    row.
+    This function produces a ``DataFrame`` where each such ``measure`` (e.g.
+    OD600, FITC, A450, etc.) is in a separate column, and each physical well is
+    in a single row.
 
-    For each entry in `table`, this function reads each of the `measures` in
+    For each entry in ``table``, this function reads each of the ``measures`` in
     that table and joins those measures horizontally (one measure per column);
-    then it concatenates `table`s vertically, such that there is one row per well.
+    then it concatenates ``table``\ s vertically, such that there is one row per well.
 
-    Each `dict` in `tables` represents a single plate, which may have multiple
-    `measures`. Each of the `measures` will be read and joined by well. The
-    union of parameters in each `measure` and `table` will be passed as
-    `**kwargs` to `read_single`.
+    Each ``dict`` in ``tables`` represents a single plate, which may have multiple
+    ``measures``. Each of the ``measures`` will be read and joined by well. The
+    union of parameters in each ``measure`` and ``table`` will be passed as
+    ``**kwargs`` to ``read_single``.
 
-    Each `table` can have several keys which serve special functions. Other
-    keys will be passed as `kwargs` to `read_single` as above
-    * `measures`
-    * `platemap`: dict containing platemap metadata that will be passed to
-      `platemap_to_dataframe`. The metadata from the `platemap` argument and
-      this key will be merged
-    * transform: function that will be called with the DataFrame and `table`,
-      and should return a new DataFrame
-    * convert: tuple `(from_wells, to_wells)`; will be used to
+    Each ``table`` can have several keys which serve special functions. Other
+    keys will be passed as ``kwargs`` to ``read_single`` as above
+
+    * ``measures``: list of dicts, each representing a different variable.
+      Will be merged with ``table`` (values in the ``measure`` overwrite those
+      in the ``table``) and passed as ``**kwargs`` to ``read_single``.
+    * ``platemap``: dict containing platemap metadata that will be passed to
+      :func:`~microplates.data.platemap_to_dataframe`. The metadata from the ``platemap``
+      argument and from this key will be merged
+    * ``transform``: function that will be called with the ``DataFrame`` and ``table``,
+      and should return a new, possibly modified ``DataFrame``
+    * ``scale``: tuple ``(from_wells, to_wells)``; will be used to call
+      :func:`data.scale_plate`
 
     Examples
     --------
@@ -77,6 +81,9 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
     platemap : dict
         Platemap; will be evaluated by `data.platemap_to_dataframe` and joined
         to each `table`
+    **kwargs : dict, optional
+        Additional arguments will be merged into each ``table``, with values
+        from the ``table`` overwriting those in ``**kwargs``.
 
     Returns
     -------
@@ -90,7 +97,7 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
 
     if platemap is None:
         platemap = {}
-    platemap = prog2spec(platemap)
+    platemap = platemap_to_dataframe(platemap)
 
     # for each file
     for table in tables:
@@ -120,14 +127,14 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
         else:
             table_platemap = {}
 
-        table_platemap = prog2spec(table_platemap)
+        table_platemap = platemap_to_dataframe(table_platemap)
 
         # if instructions to broadcast the per-table mapfile from
         # one microplate shape to another (e.g. 96 to 384), do the conversion
-        if "convert" in table:
-            convert_from, convert_to = table["convert"]
+        if "scale" in table:
+            convert_from, convert_to = table["scale"]
 
-            table_platemap = convert_spec(table_platemap, convert_from, convert_to)
+            table_platemap = scale_plate(table_platemap, convert_from, convert_to)
 
         table = {x: table[x] for x in table if x not in special_keys}
 

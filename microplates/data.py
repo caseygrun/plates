@@ -1,3 +1,16 @@
+"""Generate and manipulate tidy :class:`pandas.DataFrame`\ s representing microplate data.
+
+- Generate a tidy DataFrame containing microplate metadata, e.g. experimental conditions, replicates, etc.:
+    + :func:`platemap_to_dataframe`
+    + :func:`cherrypick`
+- Combine or reshape microplate DataFrames:
+    + :func:`scale_plate`
+    + :func:`combine_plate_dataframes`
+- Munge:
+    + :func:`add_row_column`
+    + :func:`fortify_plate`
+"""
+
 from .utils import *
 
 def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=False):
@@ -9,28 +22,31 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     Notes
     -----
 
-    Each program is of this form:
+    Each program is of this form::
 
         {
             'A1:A3': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration' [[0, 10, 100]] }
             ...
         }
 
-    where each _rule_ maps a range ('A1:A3' in this case) to a set of values to be applied
-    to that range. Let's walk through this rule:
+    where each _rule_ maps a range (``'A1:A3'`` in this case) to a set of values
+    which should be applied to that range. Let's walk through this rule:
 
-    'A1:A3' specifies that this rule applies to wells 'A1', 'A2', and 'A3'.
+    ``A1:A3`` specifies that this rule applies to wells ``A1``, ``A2``, and ``A3``.
 
-    The three _variables_ that apply to this range are `strain`, `drug`, and `concentration`.
+    The three *variables* that apply to this range are ``strain``, ``drug``,
+    and ``concentration``.
     They have the following values for this range:
 
-        - all wells have `strain = 'PAO1'`
-        - all wells have `drug = 'ampicillin'`
-        - concentration is spooled across the range, such that
-          `A1` has `concentration = 0`, `A2` has `concentration = 10`, etc.
+        - all wells have ``strain = 'PAO1'``
+        - all wells have ``drug = 'ampicillin'``
+        - concentration is "spooled" across the range, such that
+          ``A1`` has ``concentration = 0``, ``A2`` has ``concentration = 10``,
+          and ``A3`` has ``concentration = 100``.
 
-    The resulting dataframe would have column for each of the variables (`strain`, `drug`,
-    and `concentration`), in addition to `well`. There would be 1 row for each well in the
+    The resulting ``DataFrame`` would have one column for each of the variables
+    (``strain``, ``drug``, and ``concentration``), in addition to ``well``,
+    which would be the index. There would be 1 row for each well in the
     96-well plate, like this::
 
             strain        drug  concentration
@@ -54,23 +70,37 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     a comma::
 
         {
-            'A1:A3,B5:B7': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration' [[0, 10, 100]] }
+            'A1:A3,B5:B7': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }
             ...
         }
+
 
     Note that spooling applies to each range *indepdendently*; this means in the example above,
-    the `concentration` of `A1` = `concentration` of `B5` = 0, `concentration` of `A2` =
-    `concentration` of `B6` = 10, and so on. On the other hand, if you did this, ::
+    the ``concentration`` of `A1` = 0, `concentration` of `B5` = 0, `concentration` of ``A2`` = 10,
+    `concentration` of `B6` = 10, and so on::
 
-        {
-            'A1:A3,B5': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration' [[0, 10, 100]] }
-            ...
-        }
+        >>> df = platemap_to_dataframe({
+        ...     'A1:A3,B5:B7': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }
+        ... })
+        >>> df.loc[['A1','A2','A3','B5','B6','B7'],:]
+             strain        drug  concentration
+        well
+        A1     PAO1  ampicillin            0.0
+        A2     PAO1  ampicillin           10.0
+        A3     PAO1  ampicillin          100.0
+        B5     PAO1  ampicillin            0.0
+        B6     PAO1  ampicillin           10.0
+        B7     PAO1  ampicillin          100.0
 
-    `concentration` would spool across `A1:A3`, but `B5` would be assigned a concentration of
-    `[[0, 10, 100]]`... probably not what you wanted.
 
-    If you wanted to use a different plate shape, just add a `well` key::
+    On the other hand, this will not work and will generate an error, as the
+    function will try and set ``concentration`` for `B5` to ``[[0,10,100]]``::
+
+        >>> df = platemap_to_dataframe({
+        ...     'A1:A3,B5': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }
+        ... })
+
+    If you want to use a different plate shape, just add a ``well`` key::
 
         {
             "A1:A3": { 'strain': 'PAO1' },
@@ -78,13 +108,37 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
         }
 
     Wells not appearing in the platemap have values of NaN for all columns. You can
-    easily throw away extra wells that are not in the platemap using `dropna`::
+    easily throw away extra wells that are not in the platemap using :func:`pandas.dropna <pandas:pandas.dropna>`::
 
         >>> platemap_to_dataframe({'A1:A3': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }}).dropna()
            strain        drug  concentration
         A1   PAO1  ampicillin            0.0
         A2   PAO1  ampicillin           10.0
         A3   PAO1  ampicillin          100.0
+
+    Or, you can fill columns with a default value, using :func:`pandas.fillna`::
+
+        >>> (platemap_to_dataframe({'A1:A3': { 'strain': 'PAO1', 'drug': 'ampicillin', 'concentration': [[0, 10, 100]] }})
+        ...    .fillna({
+        ...      'drug': 'none',
+        ...      'strain': 'sterile',
+        ...      'concentration': 0
+        ...    }))
+               strain        drug  concentration
+        well
+        A1       PAO1  ampicillin            0.0
+        A2       PAO1  ampicillin           10.0
+        A3       PAO1  ampicillin          100.0
+        A4    sterile        none            0.0
+        A5    sterile        none            0.0
+        ...       ...         ...            ...
+        H8    sterile        none            0.0
+        H9    sterile        none            0.0
+        H10   sterile        none            0.0
+        H11   sterile        none            0.0
+        H12   sterile        none            0.0
+
+        [96 rows x 3 columns]
 
     Parameters
     ----------
@@ -94,15 +148,16 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
         each key should be a *range* of wells, in any of these forms:
             - single well (e.g. ``A1``)
             - rectangular range of specific wells (``A1:B6``)
-            - range of entire columns or entire rows (e.g. ``A:A`` = ``A1``, ``A2``, ``A3``,
-            etc.; ``1:6`` = all of columns ``1``, ``2``, ... ``6`` etc.)
-            - a comma-separated series of ranges (`A:B,E:F`, etc.)
+            - range of entire columns or entire rows (e.g. ``A:A`` = ``A1``,
+              ``A2``, ``A3``, etc.; ``1:6`` = all of columns ``1``, ``2``, ...
+              ``6`` etc.)
+            - a comma-separated series of ranges (``A:B,E:F``, etc.)
 
         each value should be a ``dict`` containing variables to assign to that
         range of wells. For that range, each key will be a column in the output
-        DataFrame. If a value is `array_like` and the same shape as the range,
+        DataFrame. If a value is ``array_like`` and the same shape as the range,
         then each well in the range will be assigned a matching element of the
-        `array_like` value. See tutorial and examples.
+        ``array_like`` value. See tutorial and examples.
 
         One special key ``"wells"`` may be used to set the number of
         wells in the plate (e.g. 96, 384, etc.).
@@ -175,7 +230,8 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
     for rngs, values in prog.items():
 
         # key may be a comma-separated list of ranges
-        for rng in rngs.split(','):
+        rngs = rngs.split(',')
+        for rng in rngs:
 
             # keys may be ranges (e.g. 'A1:F12')
             tup = range2tuple(rng,wells=wells)
@@ -214,7 +270,7 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
                 tup = cell2tuple(rng)
                 if tup is not None:
                     for key, value in values.items():
-                        data.loc[rng,key] = value
+                        data.at[rng,key] = value
 
     return data
 prog2spec = platemap_to_dataframe
@@ -279,7 +335,193 @@ def cherrypick(pick_wells, values={'Pick':True}, others = {}, wells=96):
     df = platemap_to_dataframe(platemap, wells=wells)
     return df
 
+def combine_plate_dataframes(
+        layout,
+        interleave_rows=False, interleave_columns=False,
+        wells_from=96, wells_to=384,
+        source_well=None):
+    """
+    Combines DataFrames for multiple plates into a DataFrame for one larger plate;
+    typically four 96-well plates are combined into one 384-well plate, but
+    other combinations are possible as long as the layout of smaller plates
+    fits in the larger plate.
 
+
+    Parameters
+    ----------
+    layout : list of list of pd.DataFrame
+        Arrangement of DataFrames. `[[a, b], [c, d]]` will place DataFrame `a`
+        in the top left, `b` in the top right, `c` bottom-left, `d` bottom-right.
+    interleave_rows: bool, default=False
+        True to add 1 row from each source plate before moving on to the next
+        row.
+    interleave_columns: bool, default=False
+        True to add 1 column from each source plate before moving on to the next
+        column.
+    wells_from : int, default=96
+        Dimensions of the starting plates
+    wells_to : int, default=384
+        Dimensions of the output plate
+    source_well : str, optional
+        If given, names a new column, which will record the well in the input
+        plate(s).
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame for the larger plate.
+
+    Examples
+    --------
+
+    """
+    newspec = {}
+    dims_from = plates[wells_from]
+    dims_to = plates[wells_to]
+    n_plate_rows = len(layout)
+    n_plate_cols = len(layout[0])
+
+    # make sure ratio is an integer
+    ratio_rows = dims_to[0] // dims_from[0]
+    ratio_cols = dims_to[1] // dims_from[1]
+
+    # check that the plates in `layout` fit in the destination plate
+    if dims_from[0]*n_plate_rows != dims_to[0]:
+        raise Exception("Number of wells in layout (%d wells * %d plates) does not match target plate size (%d rows)".format(dims_from[0], n_plate_rows, dims_to[0]))
+    if dims_from[1]*n_plate_cols != dims_to[1]:
+        raise Exception("Number of wells in layout (%d wells * %d plates) does not match target plate size (%d rows)".format(dims_from[1], n_plate_cols, dims_to[1]))
+
+    for i, plate_row in enumerate(layout):
+        for j, plate in enumerate(plate_row):
+            for cell,row in plate.iterrows():
+                r, c = cell2tuple(cell)
+                if interleave_rows:
+                    r = ratio_rows * r + (i % ratio_rows)
+                else:
+                    r = r + dims_from[0] * i
+
+                if interleave_columns:
+                    c = ratio_cols * c + j % ratio_cols
+                else:
+                    c = c + dims_from[1] * j
+
+                new_cell = tuple2cell(r,c)
+                newspec[new_cell] = row
+                if source_well is not None:
+                    newspec[new_cell][source_well] = cell
+    return pd.DataFrame(newspec).transpose()
+combine_specs = combine_plate_dataframes
+
+
+
+def _map_plate(from_wells, to_wells):
+    """private
+    """
+    mapping = {}
+    # make sure ratio is an integer
+    ratio = (plates[to_wells][0] // plates[from_wells][0],
+             plates[to_wells][1] // plates[from_wells][1])
+
+    for i in range(plates[from_wells][0]):
+        for j in range(plates[from_wells][1]):
+            mapping[tuple2cell(i,j)] = [tuple2cell(x,y) for x in range(ratio[0]*i, ratio[0]*(i+1)) for y in range(ratio[1]*j, ratio[1]*(j+1))]
+    return mapping
+
+_plate_conversion_maps = {
+    24:  {  96:  _map_plate(24, 96),   384: _map_plate(24, 384), 1536: _map_plate(24, 1536) },
+    96:  {  384: _map_plate(96, 384), 1536: _map_plate(96, 1536)  },
+    384: { 1536: _map_plate(96, 1536) }
+}
+
+
+def scale_plate(spec,from_wells,to_wells,include_row_column=True):
+    """scale a plate to a larger number of wells by copying data
+
+    Converts a tidy plate dataframe from a `from_wells`-sized plate to a
+    `to_wells`-sized plate. For example, you could map data from a 24-well plate
+
+    ===== == == == == == ==
+    _     1  2  3  4  5  6
+    ===== == == == == == ==
+    **A** 1  2  3  4  5  6
+    **B** 7  8  9  10 11 12
+    **C** 13 14 15 16 17 18
+    **D** 19 20 21 22 23 24
+    ===== == == == == == ==
+
+    to a 96-well plate by copying each well to 4 wells:
+
+    ===== == == == == == == == == == == == ==
+    _     1  2  3  4  5  6  7  8  9  10 11 12
+    ===== == == == == == == == == == == == ==
+    **A** 1  1  2  2  3  3  4  4  5  5  6  6
+    **B** 1  1  2  2  3  3  4  4  5  5  6  6
+    **C** 7  7  8  8  9  9  10 10 11 11 12 12
+    **D** 7  7  8  8  9  9  10 10 11 11 12 12
+    **E** 13 13 14 14 15 15 16 16 17 17 18 18
+    **F** 13 13 14 14 15 15 16 16 17 17 18 18
+    **G** 19 19 20 20 21 21 22 22 23 23 24 24
+    **H** 19 19 20 20 21 21 22 22 23 23 24 24
+    ===== == == == == == == == == == == == ==
+
+    The number of rows of a `to_wells`-sized plate must be an integer multiple
+    of the number of rows in a `from_wells`-sized plate, and likewise for
+    columns (typically the multiple is a power of 4).
+    """
+    delete_row_column = ('row' in spec.columns or 'column' in spec.columns) and not include_row_column
+    try:
+        conversion_map = _plate_conversion_maps[from_wells][to_wells]
+    except:
+        # raise Exception("Do not know how to convert %d-well plate to %d-well plate".format(from_wells,to_wells))
+        conversion_map = _plate_conversion_map(from_wells=from_wells, to_wells=to_wells)
+
+    newspec = {}
+    for name,row in spec.iterrows():
+        for cell in conversion_map[name]:
+            r = row.copy()
+            if include_row_column:
+                r['row'], r['column'] = cell2tuple(cell)
+            if delete_row_column:
+                del r['row'], r['column']
+            newspec[cell] = r
+
+    return pd.DataFrame(newspec).transpose()
+convert_spec = scale_plate
+
+
+
+def scale96to384(spec,**kwargs):
+    """
+    Converts a DataFrame for a 96-well plate to a DataFrame for a 384-well
+    plate. Specific case of :func:`~microplates.data.scale_plate`
+
+    Assumes each well in the 96-well plate is replicated onto 4 wells in a 384-well
+    plate; e.g. A1 in 96-well -> A1, A2, B1, B2 in 384-well.
+
+    Parameters
+    ----------
+    spec : DataFrame
+        spec, as returned by ``platemap_to_dataframe``
+
+    include_row_column : bool
+        True to include columns named `row` and `column` in the resulting
+        data frame, corresponding to the 0-indexed row/column in the original
+        microtiter plate.
+
+        If there are already `row`/`column` columns in the DataFrame and:
+
+        * `include_row_column = False`, they will be deleted
+        * `include_row_column = True`, they will be replaced with values for
+          the 384-well plate
+
+    Returns
+    -------
+    DataFrame
+        spec, as returned by ``platemap_to_dataframe``
+
+    """
+    return scale_plate(spec,96,384,**kwargs)
+spec96to384 = scale96to384
 
 
 def fortify_plate(df, inplace=False):
@@ -393,191 +635,3 @@ def add_row_column(df, well_variable='well',
     if plate_col_variable is not None:
         df[plate_col_variable] = df[well_variable].astype(str).apply(col_mapper)
     return df
-
-
-def combine_plate_dataframes(
-        layout,
-        interleave_rows=False, interleave_columns=False,
-        wells_from=96, wells_to=384,
-        source_well=None):
-    """
-    Combines DataFrames for multiple plates into a DataFrame for one larger plate;
-    typically four 96-well plates are combined into one 384-well plate, but
-    other combinations are possible as long as the layout of smaller plates
-    fits in the larger plate.
-
-
-    Parameters
-    ----------
-    layout : list of list of pd.DataFrame
-        Arrangement of DataFrames. `[[a, b], [c, d]]` will place DataFrame `a`
-        in the top left, `b` in the top right, `c` bottom-left, `d` bottom-right.
-    interleave_rows: bool, default=False
-        True to add 1 row from each source plate before moving on to the next
-        row.
-    interleave_columns: bool, default=False
-        True to add 1 column from each source plate before moving on to the next
-        column.
-    wells_from : int, default=96
-        Dimensions of the starting plates
-    wells_to : int, default=384
-        Dimensions of the output plate
-    source_well : str, optional
-        If given, names a new column, which will record the well in the input
-        plate(s).
-
-    Returns
-    -------
-    pd.DataFrame
-        Combined DataFrame for the larger plate.
-
-    Examples
-    --------
-
-    """
-    newspec = {}
-    dims_from = plates[wells_from]
-    dims_to = plates[wells_to]
-    n_plate_rows = len(layout)
-    n_plate_cols = len(layout[0])
-
-    # make sure ratio is an integer
-    ratio_rows = dims_to[0] // dims_from[0]
-    ratio_cols = dims_to[1] // dims_from[1]
-
-    # check that the plates in `layout` fit in the destination plate
-    if dims_from[0]*n_plate_rows != dims_to[0]:
-        raise Exception("Number of wells in layout (%d wells * %d plates) does not match target plate size (%d rows)".format(dims_from[0], n_plate_rows, dims_to[0]))
-    if dims_from[1]*n_plate_cols != dims_to[1]:
-        raise Exception("Number of wells in layout (%d wells * %d plates) does not match target plate size (%d rows)".format(dims_from[1], n_plate_cols, dims_to[1]))
-
-    for i, plate_row in enumerate(layout):
-        for j, plate in enumerate(plate_row):
-            for cell,row in plate.iterrows():
-                r, c = cell2tuple(cell)
-                if interleave_rows:
-                    r = ratio_rows * r + (i % ratio_rows)
-                else:
-                    r = r + dims_from[0] * i
-
-                if interleave_columns:
-                    c = ratio_cols * c + j % ratio_cols
-                else:
-                    c = c + dims_from[1] * j
-
-                new_cell = tuple2cell(r,c)
-                newspec[new_cell] = row
-                if source_well is not None:
-                    newspec[new_cell][source_well] = cell
-    return pd.DataFrame(newspec).transpose()
-combine_specs = combine_plate_dataframes
-
-
-
-def _map_plate(from_wells, to_wells):
-    """private
-    """
-    mapping = {}
-    # make sure ratio is an integer
-    ratio = (plates[to_wells][0] // plates[from_wells][0],
-             plates[to_wells][1] // plates[from_wells][1])
-
-    for i in range(plates[from_wells][0]):
-        for j in range(plates[from_wells][1]):
-            mapping[tuple2cell(i,j)] = [tuple2cell(x,y) for x in range(ratio[0]*i, ratio[0]*(i+1)) for y in range(ratio[1]*j, ratio[1]*(j+1))]
-    return mapping
-
-_plate_conversion_maps = {
-    24:  {  96:  _map_plate(24, 96),   384: _map_plate(24, 384), 1536: _map_plate(24, 1536) },
-    96:  {  384: _map_plate(96, 384), 1536: _map_plate(96, 1536)  },
-    384: { 1536: _map_plate(96, 1536) }
-}
-
-
-def scale_plate(spec,from_wells,to_wells,include_row_column=True):
-    """scale a plate to a larger number of wells by copying data
-
-    Converts a tidy plate dataframe from a `from_wells`-sized plate to a
-    `to_wells`-sized plate. For example, you could map data from a 24-well plate
-
-    ===== == == == == == ==
-    \\    1  2  3  4  5  6
-    ===== == == == == == ==
-    **A** 1  2  3  4  5  6
-    **B** 7  8  9  10 11 12
-    **C** 13 14 15 16 17 18
-    **D** 19 20 21 22 23 24
-    ===== == == == == == ==
-
-    to a 96-well plate by copying each well to 4 wells:
-
-    ===== == == == == == == == == == == == ==
-    \\    1  2  3  4  5  6  7  8  9  10 11 12
-    ===== == == == == == == == == == == == ==
-    **A** 1  1  2  2  3  3  4  4  5  5  6  6
-    **B** 1  1  2  2  3  3  4  4  5  5  6  6
-    **C** 7  7  8  8  9  9  10 10 11 11 12 12
-    **D** 7  7  8  8  9  9  10 10 11 11 12 12
-    **E** 13 13 14 14 15 15 16 16 17 17 18 18
-    **F** 13 13 14 14 15 15 16 16 17 17 18 18
-    **G** 19 19 20 20 21 21 22 22 23 23 24 24
-    **H** 19 19 20 20 21 21 22 22 23 23 24 24
-    ===== == == == == == == == == == == == ==
-
-    The number of rows of a `to_wells`-sized plate must be an integer multiple
-    of the number of rows in a `from_wells`-sized plate, and likewise for
-    columns (typically the multiple is a power of 4).
-    """
-    delete_row_column = ('row' in spec.columns or 'column' in spec.columns) and not include_row_column
-    try:
-        conversion_map = _plate_conversion_maps[from_wells][to_wells]
-    except:
-        # raise Exception("Do not know how to convert %d-well plate to %d-well plate".format(from_wells,to_wells))
-        conversion_map = _plate_conversion_map(from_wells=from_wells, to_wells=to_wells)
-
-    newspec = {}
-    for name,row in spec.iterrows():
-        for cell in conversion_map[name]:
-            r = row.copy()
-            if include_row_column:
-                r['row'], r['column'] = cell2tuple(cell)
-            if delete_row_column:
-                del r['row'], r['column']
-            newspec[cell] = r
-
-    return pd.DataFrame(newspec).transpose()
-convert_spec = scale_plate
-
-
-
-def scale96to384(spec,**kwargs):
-    """
-    Converts a DataFrame for a 96-well plate to a DataFrame for a 384-well
-    plate. Specific case of ``scale_plate``
-
-    Assumes each well in the 96-well plate is replicated onto 4 wells in a 384-well
-    plate; e.g. A1 in 96-well -> A1, A2, B1, B2 in 384-well.
-
-    Parameters
-    ----------
-    spec : DataFrame
-        spec, as returned by ``platemap_to_dataframe``
-
-    include_row_column : bool
-        True to include columns named `row` and `column` in the resulting
-        data frame, corresponding to the 0-indexed row/column in the original
-        microtiter plate.
-
-        If there are already `row`/`column` columns and
-        * `include_row_column = False`, they will be deleted
-        * `include_row_column = True`, they will be replaced with values for
-          the 384-well plate
-
-    Returns
-    -------
-    DataFrame
-        spec, as returned by ``platemap_to_dataframe``
-
-    """
-    return scale_plate(spec,96,384,**kwargs)
-spec96to384 = scale96to384

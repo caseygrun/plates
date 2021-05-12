@@ -1,3 +1,8 @@
+"""
+Make calculations on microplate data. Use :func:`calc_norm` to subtract
+background values, divide by value for a control condition, etc. 
+"""
+
 from __future__ import division
 import inspect
 
@@ -8,8 +13,9 @@ import numpy as np
 
 def calc_norm(df, value='OD600', on='conc', columns=[], how=None):
     """
-    Normalizes the `value` of some column by a particular column `on`,
-    using a transformation function `how`. See examples.
+    Normalizes the `value` of some column by a particular column `on`,using a
+    transformation function `how`. Useful for subtracting the first timepoint,
+    dividing by a control condition, etc.
 
     Parameters
     ----------
@@ -50,10 +56,10 @@ def calc_norm(df, value='OD600', on='conc', columns=[], how=None):
     ...     ('A2', 0.027, 1, 100),
     ... ], columns=('well','OD600','time','concentration'))
     >>> calc_norm(df,
-            value='OD600',
-            on='time',
-            columns=['time','concentration'],
-            how=lambda x: x - x.loc[0])
+    ...     value='OD600',
+    ...     on='time',
+    ...     columns=['time','concentration'],
+    ...     how=lambda x: x - x.loc[0])
        time well  OD600  concentration
     0     0   A1  0.000             10
     1     0   A2  0.000            100

@@ -1,9 +1,16 @@
+"""
+Utility functions for working with microplate data.
+"""
+
+
 import re
 import collections.abc
 import pandas as pd
 import numpy as np
 
 
+#: Mapping of available plate shapes; keys are the total number of wells in
+#: the plate (e.g. 96, 384, etc.), values are the dimensions ``(width, height)``
 plate_shapes = plate_layouts = plates = {
     6:    (2, 3),
     12:   (3, 4),
@@ -184,7 +191,7 @@ def range2cells(rng,wells=96):
         return (_alpha[0]+str(g[0]), _alpha[plates[wells][0]-1]+str(g[1]))
 
 
-def range2tuple(rng,wells=96):
+def range2tuple(rng, wells=96):
     """convert a range e.g. 'A1:B10' to a sorted pair of zero-based tuples, e.g. ((0,0),(1,10)).
     Accepts range in the form of `range2cells`. """
     # m = re.match(r"(\w)(\d+):(\w)(\d+)",rng)
@@ -197,10 +204,39 @@ def range2tuple(rng,wells=96):
 
 
 def range2cell_list(rng, wells=96, by='row'):
-    """convert a range e.g. 'A1:B10' to a sorted list of cell names, e.g. ['A1', 'A2', ..., 'B9', 'B10']"""
-    tuples = range2tuple(rng,wells=wells)
-    if tuples is not None:
-        return [tuple2cell(*t) for t in itertuples(*tuples, by=by)]
+    """convert a range e.g. 'A1:B10' to a sorted list of cell names, e.g. ['A1', 'A2', ..., 'B9', 'B10']
+    See :func:`iterrange`
+    """
+    # tuples = range2tuple(rng,wells=wells)
+    # if tuples is not None:
+    #     return [tuple2cell(*t) for t in itertuples(*tuples, by=by)]
+    return list(iterrange(rng, wells=wells, by=by))
+
+def iterrange(rngs, wells=96, by='row'):
+    """Generator over each well in a rectangular range (e.g. 'A1:B10') or comma-separated list of such ranges (e.g. 'A1:B1,C2:D2')
+
+    Parameters
+    ----------
+    rngs : str
+        Comma-separated list of rectangular ranges
+    wells : int, default=96
+        Number of wells in the microplate, indicating the plate shape
+    by : 'row'
+        ``'row'`` to iterate through each well in a row before proceeding to the next row
+        ``'column'`` to iterate through each well in a column before proceeding to the next column
+
+    Yields
+    ------
+    str
+        Name of each well in the range
+    """
+    for rng in rngs.split(','):
+        tuples = range2tuple(rng, wells=wells)
+        if tuples is not None:
+            for t in itertuples(*tuples, wells=wells, by=by):
+                yield tuple2cell(*t)
+
+iterate_range = iterrange
 
 def iterwells(n, start='A1', wells=96, by='rows'):
     """Generator to iterate through sequential wells.
@@ -256,11 +292,47 @@ def iterwells(n, start='A1', wells=96, by='rows'):
 
 iterate_wells = iterwells
 
-def infer_plate_size(cells, all=False, prefer96=False):
+def infer_plate_size(cells, all=False, prefer96=False, prefer=None):
     """determines the size or possible sizes of a microplate based on the list of well names
 
+    Parameters
+    ----------
+    cells : array_like
+        Names of wells
+    all : bool, default=False
+        True to give a list of all possible plate shapes, False to give only the
+        smallest possible plate size that accommodates all wells
+    prefer96 : bool, default=False
+        Deprecated; equivalent to `prefer=96`
+    prefer : int, optional
+        If given, indicates a plate shape that should be preferred, which may
+        not be the smallest possible shape. For instance, if ``cells`` can be
+        accommodated by 48-, 96-, 384-, and 1536-well plates, but ``prefer=96``
+        and ``all=False``, 96 will be returned.
 
+
+    Returns
+    -------
+    int or list of int
+        Size or sorted list of sizes of plates that can accommodate cells
+
+    Examples
+    --------
+    >>> infer_plate_size(['A6'])
+    24
+
+    >>> infer_plate_size(['A6'], all=True)
+    [24, 48, 96, 384, 1536]
+
+    >>> infer_plate_size(['A6'], prefer=96)
+    96
+
+    >>> infer_plate_size(['H13'], prefer=96)
+    384
     """
+    if prefer96:
+        prefer = 96
+
     cells = [cell2tuple(w) for w in cells]
     max_row = max(w[0] for w in cells)
     max_col = max(w[1] for w in cells)
@@ -272,8 +344,8 @@ def infer_plate_size(cells, all=False, prefer96=False):
     if all:
         return possible_plates
     else:
-        if prefer96 and 96 in possible_plates:
-            return 96
+        if prefer is not None and prefer in possible_plates:
+            return prefer
         else:
             return min(possible_plates)
 
