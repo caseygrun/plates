@@ -64,9 +64,16 @@ def test_range2cell_list():
     assert range2cell_list('A1:B2', by='column') == ['A1','B1','A2','B2']
 
 def test_iterwells():
+    assert list(iterwells(2,start='B6')) == ['B6', 'B7']
     assert list(iterwells(2,start='H12')) == ['H12', 'A1']
     assert list(iterwells(13)) == ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','A11','A12','B1']
     assert list(iterwells(9)) == ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9']
+
+    assert list(iterwells(4)) == ['A1', 'A2', 'A3', 'A4']
+    assert list(iterwells(4,by='columns')) == ['A1', 'B1', 'C1', 'D1']
+    assert list(iterwells(16,by='columns')) == ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2']
+    assert list(iterwells(48, wells=384)) == ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'A20', 'A21', 'A22', 'A23', 'A24', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17', 'B18', 'B19', 'B20', 'B21', 'B22', 'B23', 'B24']
+
 
 def test_infer_plate_size():
     assert infer_plate_size(['H12']) == infer_plate_size(['A1','H12']) == infer_plate_size(range2cell_list('A1:H12')) == 96

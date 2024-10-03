@@ -62,7 +62,7 @@ def itertuples(x,y, by='row'):
 #         return (letters[g[0]], int(g[1])-1)
 
 def letters2row(r):
-    """Converts a string of letters into a number, in base 26
+    """Interprets a string of letters as a number in base 26
 
     Examples
     --------
@@ -92,19 +92,19 @@ def letters2row(r):
     return row-1
 
 cell_regex = re.compile(r"^([a-zA-Z]+)(\d+)")
-def cell2tuple(cell):
-    """convert a string cell spec e.g. 'A1' into a zero-based tuple
+def well2tuple(cell):
+    """convert a string well name e.g. 'A1' into a zero-based tuple of (row, column)
 
     Examples
     --------
 
-    >>> cell2tuple('A1')
+    >>> well2tuple('A1')
     (0,0)
-    >>> cell2tuple('G11')
+    >>> well2tuple('G11')
     (6,10)
-    >>> cell2tuple('AA1')
+    >>> well2tuple('AA1')
     (26,0)
-    >>> cell2tuple('AB10')
+    >>> well2tuple('AB10')
     (27,9)
     """
     m = cell_regex.match(cell)
@@ -116,12 +116,16 @@ def cell2tuple(cell):
             row = row * len(_alpha)
             row = row + letters[row_alpha[i]]+1
         return (row-1, int(g[1])-1)
+cell2tuple = well2tuple
 
-def is_cell(cell):
-    return cell_regex.fullmatch(cell) is not None
+def is_well(cell):
+    """determine if a string is a well name (e.g. A1, AA25, etc.)"""
+    return cell_regex.fullmatch(str(cell)) is not None
+
+is_cell = is_well
 
 def row2letters(i):
-    """Convert a number to a string, in base 26
+    """Convert a number to a string of letters in base 26, with A=0, B=1, etc.
 
     Examples
     --------
@@ -143,20 +147,38 @@ def row2letters(i):
         i = i // len(_alpha) - 1
     return r
 
-def tuple2cell(i,j):
-    """convert zero-indexed coordinates `i`, `j` to a cell name e.g. 'A1'"""
+def tuple2well(i,j):
+    """convert zero-indexed coordinates row `i`, column `j` to a cell name e.g. 'A1'"""
     return row2letters(i) + str(j+1)
+tuple2cell = tuple2well
 
-def range2cells(rng,wells=96):
-    """convert a range e.g. 'A1:B7' to a pair of cells e.g. ('A1', 'B7').
+def range2wells(rng,wells=96):
+    """convert a rectangular range e.g. 'A1:B7' to a pair of wells e.g. ('A1', 'B7').
 
     Parameters
     ----------
     rng : str
-        Accepts ranges of the form `'A1:B7'`, `'A:C'`, or `'2:4'`.
-        For row or column ranges (e.g. 'A:C' or '2:4'), you must specify the number of `wells` in the plate
+        Accepts ranges of the form ``'A1:B7'`` (``well:well``), ``'A:C'``
+        (``row:row``), or `'2:4'` (``column:column``). For row or column ranges
+        (e.g. ``'A:C'`` or ``'2:4'``), you should specify the number of ``wells``
+        in the plate; the wells returned will be a rectangular range containing
+        all rows or columns
     wells : int, default=96
-        number of wells in the plate (implies plate shape)
+        number of wells in the plate (implies plate shape); used for row or
+        column ranges
+
+    Examples
+    --------
+    >>> range2wells('A:B')
+    ('A1', 'B12')
+    >>> range2wells('A:B',wells=384)
+    ('A1', 'B24')
+    >>> range2wells('2:4')
+    ('A2', 'H4')
+    >>> range2wells('2:4',wells=24)
+    ('A2', 'D4')
+    >>> range2wells('A1:B7')
+    ('A1', 'B7')
 
     Returns
     -------
@@ -189,11 +211,23 @@ def range2cells(rng,wells=96):
     if m is not None:
         g = sorted(int(x) for x in m.groups())
         return (_alpha[0]+str(g[0]), _alpha[plates[wells][0]-1]+str(g[1]))
-
+range2cells = range2wells
 
 def range2tuple(rng, wells=96):
-    """convert a range e.g. 'A1:B10' to a sorted pair of zero-based tuples, e.g. ((0,0),(1,10)).
-    Accepts range in the form of `range2cells`. """
+    """convert a range e.g. 'A1:B10' to a sorted pair of zero-based tuples, e.g. ``((0,0),(1,10))``.
+
+    Parameters
+    ----------
+    rng : str
+        range in the form accepted by :func:`range2wells`.
+    wells : int, default=96
+        number of wells in the plate (implies plate shape); used for row or
+        column ranges
+
+    See Also
+    --------
+    :func:`range2wells`
+    """
     # m = re.match(r"(\w)(\d+):(\w)(\d+)",rng)
     # if m is not None:
     #     g = m.groups()
@@ -203,7 +237,7 @@ def range2tuple(rng, wells=96):
         return tuple(sorted([cell2tuple(cs[0]), cell2tuple(cs[1])]))
 
 
-def range2cell_list(rng, wells=96, by='row'):
+def range2well_list(rng, wells=96, by='row'):
     """convert a range e.g. 'A1:B10' to a sorted list of cell names, e.g. ['A1', 'A2', ..., 'B9', 'B10']
     See :func:`iterrange`
     """
@@ -211,6 +245,8 @@ def range2cell_list(rng, wells=96, by='row'):
     # if tuples is not None:
     #     return [tuple2cell(*t) for t in itertuples(*tuples, by=by)]
     return list(iterrange(rng, wells=wells, by=by))
+
+range2cell_list = range2well_list
 
 def iterrange(rngs, wells=96, by='row'):
     """Generator over each well in a rectangular range (e.g. 'A1:B10') or comma-separated list of such ranges (e.g. 'A1:B1,C2:D2')
@@ -221,25 +257,84 @@ def iterrange(rngs, wells=96, by='row'):
         Comma-separated list of rectangular ranges
     wells : int, default=96
         Number of wells in the microplate, indicating the plate shape
-    by : 'row'
-        ``'row'`` to iterate through each well in a row before proceeding to the next row
+    by : str, default='row'
+        ``'row'`` to iterate through each well in a row (in the range) before proceeding to the next row
         ``'column'`` to iterate through each well in a column before proceeding to the next column
 
     Yields
     ------
     str
         Name of each well in the range
+
+    See Also
+    --------
+    iterrange
     """
     for rng in rngs.split(','):
         tuples = range2tuple(rng, wells=wells)
         if tuples is not None:
-            for t in itertuples(*tuples, wells=wells, by=by):
+            for t in itertuples(*tuples, by=by):
                 yield tuple2cell(*t)
 
 iterate_range = iterrange
 
-def iterwells(n, start='A1', wells=96, by='rows'):
+def next_well(well, wells=96, by='rows', **kwargs):
+    return next(iterwells(1, start=well, wells=wells, by=by, **kwargs))
+
+
+def next_row(well, wells=96, plate=False, start_plate=0):
+    t = cell2tuple(well)
+    t = (t[0]+1, 0)
+
+
+    if t[0] >= plate_layouts[wells][0]:
+        if plate:
+            return (start_plate+1, 'A1')
+        else:
+            return 'A1'
+    else:
+        return tuple2cell(t)
+
+def next_column(well, wells=96, plate=False, start_plate=0):
+    t = cell2tuple(well)
+    t = (0, t[1]+1)
+
+
+    if t[1] >= plate_layouts[wells][1]:
+        start_plate += 1
+        well = 'A1'
+    else:
+        well = tuple2cell(t)
+
+    if plate:
+        return (start_plate, well)
+    else:
+        return well
+
+def iterwells(n, start='A1', wells=96, by='rows', plate=False, start_plate=0):
     """Generator to iterate through sequential wells.
+
+    Notes
+    -----
+
+    :func:`iterwells` iterates through a number of wells in a possibly
+    non-rectangular range, traversing all wells in the plate:
+
+    >>> list(iterwells(14, start='A3', wells=96))
+    ['A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'B1', 'B2', 'B3', 'B4']
+
+    :func:`iterrange` by contrast traverses all wells in a rectangular range:
+
+    >>> list(iterrange('A3:B4'))
+    ['A3', 'A4', 'B3', 'B4']
+
+    For rectangular ranges that span the entire width or height of the plate,
+    the behavior of the two functions is equivalent:
+
+    >>> list(iterrange('A:B'))
+    ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12']
+    >>> list(iterwells(24, start='A1'))
+    ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12']
 
     Parameters
     ----------
@@ -249,30 +344,51 @@ def iterwells(n, start='A1', wells=96, by='rows'):
         Which well to start at
     wells : int, default=96
         Layout of the plate (number of wells)
-    by : str, default='rows'
-        Iterate across rows or across columns
+    by : str, default='row'
+        ``'row'`` to iterate through each well in a row before proceeding to the next row
+        ``'column'`` to iterate through each well in a column before proceeding to the next column
+    plate : bool, default=False
+        True to track a plate number and yield a tuple of (plate, well) rather than just a well. 
+        Allows iterating across >96 wells; the 97th well will yield (start_plate+1, 'A1'), etc.
+    start_plate : int, default=0
+        if ``plate`` is ``True``, then what number should the first plate start with?
 
-    Returns
-    -------
-    int
-        Description of anonymous integer return value.
+
+    Yields
+    ------
+    str
+        Well names, in order
 
     Examples
     --------
-    >>> np.add(1, 2)
-    3
+    >>> list(iterwells(4))
+    ['A1', 'A2', 'A3', 'A4']
 
-    Comment explaining the second example.
+    >>> list(iterwells(4,by='columns'))
+    ['A1', 'B1', 'C1', 'D1']
 
-    >>> np.add([[1, 2], [3, 4]],
-    ...        [[5, 6], [7, 8]])
-    array([[ 6,  8],
-           [10, 12]])
+    >>> list(iterwells(16,by='columns'))
+    ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2']
+
+    >>> list(iterwells(48, wells=384))
+    ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'A20', 'A21', 'A22', 'A23', 'A24', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17', 'B18', 'B19', 'B20', 'B21', 'B22', 'B23', 'B24']
+
+    See Also
+    --------
+    iterrange
+
     """
     cell = list(cell2tuple(start))
     (rows, cols) = plates[wells]
+
+    current_plate = start_plate
+
     while n > 0:
-        yield(tuple2cell(*cell))
+        if plate:
+            yield( (current_plate,tuple2cell(*cell)) )
+        else:
+            yield(tuple2cell(*cell))
+
         n = n - 1
 
         if by == 'columns':
@@ -282,6 +398,7 @@ def iterwells(n, start='A1', wells=96, by='rows'):
                 cell[1] += 1
             if cell[1] >= cols:
                 cell[1] = 0
+                current_plate += 1
         else:
             cell[1] += 1
             if cell[1] >= cols:
@@ -289,6 +406,7 @@ def iterwells(n, start='A1', wells=96, by='rows'):
                 cell[0] +=1
             if cell[0] >= rows:
                 cell[0] = 0
+                current_plate += 1
 
 iterate_wells = iterwells
 
