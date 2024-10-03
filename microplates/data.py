@@ -599,7 +599,7 @@ def add_row_column(df, well_variable='well',
     ----------
     df : pd.DataFrame
     well_variable : str, default='well'
-        Name of the column in `df` containing well names
+        Name of the column in `df` containing well names, or None to use the index
     plate_row_variable : str, default='plate_row'
         Name of the new column to create, indicating physical row of each well.
         Set to `None` to skip creating this column.
@@ -620,14 +620,18 @@ def add_row_column(df, well_variable='well',
 
     Examples
     --------
-    >>> df = pd.DataFrame({'well':['A1','A2','B3'], 'OD600': [0.25, 0.3, 0.21]})
+    >>> df = pd.DataFrame({'well':['A1','A2','B3'], 'OD600': [0.25, 0.3, 0.21]}).dropna()
     >>> add_row_column(df)
       well  OD600  plate_row  plate_column
     0   A1   0.25          0             0
     1   A2   0.30          0             1
     2   B3   0.21          1             2
 
-
+    >>> add_row_column(df,natural=True)
+      well  OD600 plate_row  plate_column
+    0   A1   0.25         A             1
+    1   A2   0.30         A             2
+    2   B3   0.21         B             3
     """
     if natural:
         def row_mapper(x):

@@ -78,3 +78,86 @@ def test_cherrypick():
     # B1    green
     # B2    green
     # B3    green
+
+def test_add_row_column():
+
+    df = pd.DataFrame({'well':['A1','A2','B3'], 'OD600': [0.25, 0.3, 0.21]}).dropna()
+    df2 = add_row_column(df, natural=False)
+    #   well  OD600  plate_row  plate_column
+    # 0   A1   0.25          0             0
+    # 1   A2   0.30          0             1
+    # 2   B3   0.21          1             2
+
+    assert 'plate_row' in df2.columns
+    assert 'plate_column' in df2.columns
+
+    df2 = df2.set_index('well')
+    assert df2.loc['A1','plate_row'] == 0
+    assert df2.loc['A1','plate_column'] == 0
+    assert df2.loc['A2','plate_row'] == 0
+    assert df2.loc['A2','plate_column'] == 1
+    assert df2.loc['B3','plate_row'] == 1
+    assert df2.loc['B3','plate_column'] == 2
+
+    df = df.set_index('well')
+    df2 = add_row_column(df, well_variable=None, natural=False)
+    assert df2.loc['A1','plate_row'] == 0
+    assert df2.loc['A1','plate_column'] == 0
+    assert df2.loc['A2','plate_row'] == 0
+    assert df2.loc['A2','plate_column'] == 1
+    assert df2.loc['B3','plate_row'] == 1
+    assert df2.loc['B3','plate_column'] == 2
+
+    df2 = add_row_column(df, well_variable=None, natural=True)
+    assert df2.loc['A1','plate_row'] == 'A'
+    assert df2.loc['A1','plate_column'] == 1
+    assert df2.loc['A2','plate_row'] == 'A'
+    assert df2.loc['A2','plate_column'] == 2
+    assert df2.loc['B3','plate_row'] == 'B'
+    assert df2.loc['B3','plate_column'] == 3
+
+def test_fortify_plate():
+    # there is a column called 'well'
+    df = pd.DataFrame({'well':['A1','A2','A3','B1','B2','B3'], 'OD600': [0.25, 0.3, 0.21, 0.25, 0.3, 0.21], 'strain': ['Pa'] * 6}).dropna()
+    df2 = fortify_plate(df)
+    # .      OD600 strain
+    # well
+    # A1     0.25     Pa
+    # A2     0.30     Pa
+    # A3     0.21     Pa
+    # B1     0.25     Pa
+    # B2     0.30     Pa
+    # B3     0.21     Pa
+    assert df2.index.name == 'well'
+    assert all(df2.index == ['A1','A2','A3','B1','B2','B3'])
+    assert set(df2.columns) == {'OD600', 'strain'}
+
+    # the index is called 'wells'
+    df = pd.DataFrame({'wells':['A1','A2','A3','B1','B2','B3'], 'OD600': [0.25, 0.3, 0.21, 0.25, 0.3, 0.21], 'strain': ['Pa'] * 6}).dropna()
+    df = df.set_index('wells')
+    df2 = fortify_plate(df)
+
+    assert df2.index.name == 'well'
+    assert all(df2.index == ['A1','A2','A3','B1','B2','B3'])
+    assert set(df2.columns) == {'OD600', 'strain'}
+
+    # wells are in the index but not named
+    df = pd.DataFrame({'foo':['A1','A2','A3','B1','B2','B3'], 'OD600': [0.25, 0.3, 0.21, 0.25, 0.3, 0.21], 'strain': ['Pa'] * 6}).dropna()
+    df = df.set_index('foo')
+    df2 = fortify_plate(df)
+
+    assert df2.index.name == 'well'
+    assert all(df2.index == ['A1','A2','A3','B1','B2','B3'])
+    assert set(df2.columns) == {'OD600', 'strain'}
+
+def test_plate_pivot():
+    df = pd.DataFrame({'well':['A1','A2','A3','B1','B2','B3'], 'OD600': [0.25, 0.3, 0.21, 0.25, 0.3, 0.21]}).dropna()
+    df2 = plate_pivot(df)
+    # plate_column     1    2     3
+    # plate_row
+    # A             0.25  0.3  0.21
+    # B             0.25  0.3  0.21
+    assert all(df2.columns == [1, 2, 3])
+    assert all(df2.index == ['A', 'B'])
+    assert all(df2.loc['A',:] == df2.loc['B',:])
+    assert all(df2.loc['A',:] == [0.25,  0.3,  0.21])
