@@ -141,6 +141,8 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
         # for each table in the file
         measure_dfs = []
         for measure in measures:
+            measure = {x: measure[x] for x in measure if x not in special_keys}
+            
             measure_df = read_single(**{ **table, **measure })
             measure_dfs.append(measure_df)
 
@@ -159,7 +161,8 @@ def read_multiple_plates(tables, read_single, platemap=None, **kwargs):
         if transform is not None:
             df = transform(df, table)
 
-        dfs.append(df)
-    data = pd.concat(dfs, join='outer')
-    data = pd.merge(left=platemap, right=data, left_index=True, right_index=True)
+        dfs.append(df.reset_index())
+    data = pd.concat(dfs, join='outer', ignore_index=True).set_index('well')
+    # data = pd.merge(left=platemap, right=data, left_index=True, right_index=True)
+    data = data.join(platemap)
     return data

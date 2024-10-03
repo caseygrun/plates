@@ -1,8 +1,8 @@
 import pandas as pd
+from .ioutils import melt_plate
 
 def read_single(path,header=None,nrows=8,measure='OD600',blank=None, **kwargs):
-    # from IPython.core.debugger import set_trace; set_trace()
-
+    
     # try to guess the header row if not provided
     if header is None:
         df = pd.read_excel(path, **kwargs)
@@ -19,20 +19,22 @@ def read_single(path,header=None,nrows=8,measure='OD600',blank=None, **kwargs):
     assert df.index.name == "<>", ("Unrecognized data format; make sure `header` is set "+
                                   "to the row right above '<>' in Excel file "+path+". header = "+str(header))
 
-    # data will be an array mirroring the layout of the physical microtiter plate
-    # `index` will be the rows, `columns` will be the physical column, and values
-    # are OD600
-    df.index.rename('row',inplace=True)
-    df.columns.rename('column',inplace=True)
-    df = df.reset_index()
+    df = melt_plate(df, measure=measure)
 
-    # convert dataframe from "wide" to "long" format (one well per row)
-    df = df.melt(id_vars=['row'],var_name='column',value_name=measure).reset_index()
+    # # data will be an array mirroring the layout of the physical microtiter plate
+    # # `index` will be the rows, `columns` will be the physical column, and values
+    # # are OD600
+    # df.index.rename('row',inplace=True)
+    # df.columns.rename('column',inplace=True)
+    # df = df.reset_index()
 
-    # generate a column showing the well name (e.g. A1) from column and row
-    df['well'] = df['row'] + df['column'].map(str)
-    df = df.set_index('well')
-    df = df.drop(columns=['row','column','index'])
+    # # convert dataframe from "wide" to "long" format (one well per row)
+    # df = df.melt(id_vars=['row'],var_name='column',value_name=measure).reset_index()
+
+    # # generate a column showing the well name (e.g. A1) from column and row
+    # df['well'] = df['row'] + df['column'].map(str)
+    # df = df.set_index('well')
+    # df = df.drop(columns=['row','column','index'])
 
     # subtract and drop the blank well if given
     if blank is not None:

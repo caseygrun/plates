@@ -46,3 +46,20 @@ def find_header_row(path=None, search=["<>"], keep='first', read=pd.read_excel, 
         return headers[-1]
     else:
         return headers
+
+def melt_plate(df, measure):
+    """convert plate from format mirroring physical microtiter plate to a tidy format with columns named "well" and `measure`
+    """
+    df.index.rename('row',inplace=True)
+    df.columns.rename('column',inplace=True)
+    df = df.reset_index()
+
+    # convert dataframe from "wide" to "long" format (one well per row)
+    df = df.melt(id_vars=['row'],var_name='column',value_name=measure).reset_index()
+
+    # generate a column showing the well name (e.g. A1) from column and row
+    df['well'] = df['row'] + df['column'].map(str)
+    df = df.set_index('well')
+    df = df.drop(columns=['row','column','index'])
+
+    return df
