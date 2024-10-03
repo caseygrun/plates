@@ -254,16 +254,36 @@ def platemap_to_dataframe(prog=None, index=None, wells=96, include_row_column=Fa
                             # if `value` is array_like
                             if isinstance(value, collections.abc.Sequence) and not isinstance(value, str):
                                 value_arr = np.array(value)
+                            elif isinstance(value, np.ndarray) and not isinstance(value, str):
+                                value_arr = value
 
-                            # and shape is the same as range,
-                            if value_arr is not None and value_arr.shape == dim:
+                            if value_arr is not None:
+                                # value_arr = value_arr.squeeze()
 
-                                # assign element-wise
-                                data.loc[cell,key] = value_arr[a,b]
+                                # and shape is the same as range,
+                                if value_arr.shape == dim:
+
+                                    # assign element-wise
+                                    data.loc[cell,key] = value_arr[a,b]
+                                    continue
+
+                                else: 
+                                    # try to treat value_arr as a 1d sequence
+                                    value_arr = value_arr.squeeze()
+                                    if len(value_arr.shape) == 1:
+                                        # if range is a single column, treat value_arr as a column vector
+                                        if value_arr.shape[0] == dim[0] and dim[1] == 1:
+                                            data.loc[cell,key] = value_arr[a]
+                                            continue
+
+                                        # if range is a single row, treat value_arr as a row vector
+                                        elif value_arr.shape[0] == dim[1] and dim[0] == 1:
+                                            data.loc[cell,key] = value_arr[b]
+                                            continue
+
 
                             # otherwise, assign entire value
-                            else:
-                                data.loc[cell,key] = value
+                            data.loc[cell,key] = value
 
             # keys may be single cells (e.g. 'B6')
             else:
@@ -540,10 +560,11 @@ def fortify_plate(df, inplace=False):
     if not inplace:
         df = df.copy()
 
-    for name in names:
-        if (df.index.name.lower() == name):
-            df.index.rename('well', inplace=True)
-            return df
+    if df.index.name is not None:
+        for name in names:
+            if (df.index.name.lower() == name):
+                df.index.rename('well', inplace=True)
+                return df
 
     if all(df.index.map(is_well)):
         df.index.rename('well', inplace=True)
@@ -552,8 +573,8 @@ def fortify_plate(df, inplace=False):
     columns = df.columns.str.lower()
     for name in names:
         if name in columns:
-            well_col = df.columns[columns.index(name)]
-            df.set_index(well_col)
+            well_col = df.columns[columns.get_loc(name)]
+            df.set_index(well_col, inplace=True)
             df.index.rename('well', inplace=True)
             return df
 
@@ -630,8 +651,158 @@ def add_row_column(df, well_variable='well',
     if not inplace:
         df = df.copy()
 
+    if well_variable is None:
+        wells = pd.Series(df.index, index=df.index)
+    else: wells = df[well_variable]
+
     if plate_row_variable is not None:
-        df[plate_row_variable] = df[well_variable].astype(str).apply(row_mapper)
+        df[plate_row_variable] = wells.astype(str).apply(row_mapper)
     if plate_col_variable is not None:
-        df[plate_col_variable] = df[well_variable].astype(str).apply(col_mapper)
+        df[plate_col_variable] = wells.astype(str).apply(col_mapper)
     return df
+
+
+def pivot_plate(data,parameter='OD600',natural=True):
+    """Pivots a tidy DataFrame of microplate data into a DataFrame where rows correspond to physical rows, columns correspond to physical columns, and each value is a single parameter of a well
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Tidy dataframe of microplate data
+    parameter : str
+        Name of the column to contain the well data
+    natural : bool, default=False
+        True to show plate rows as ``A``, ``B``, ``C``, etc. and columns as
+        ``1``, ``2``, ``3``. False to use 0-based indices for both.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing one parameter per well, with the index labeled
+        according to the physical rows of the microplate, and columns labeled
+        by the physical columns of the microplate.
+
+    Examples
+    --------
+    >>> np.add(1, 2)
+    3
+
+    Comment explaining the second example.
+
+    >>> np.add([[1, 2], [3, 4]],
+    ...        [[5, 6], [7, 8]])
+    array([[ 6,  8],
+           [10, 12]])
+    """
+    df = fortify_plate(data.copy())
+    df = add_row_column(df,natural=natural,well_variable=None)
+    return df.pivot(index='plate_row', columns='plate_column', values=parameter)
+plate_pivot = pivot_plate
+
+
+def assign_wells(df, 
+    start_wells = None, 
+    separate_samples_by = None,
+    separate_into = 'plates',
+    separate_dataframes_per_plate = False,
+    wells=96):
+    """arrange rows of a DataFrame onto a plate or plates
+
+    Use `separate_samples_by` and `separate_into` to arrange samples into separate plates or rows. 
+    
+    For example, in an experiment containing two values for `Phage Library`, `'Alpaca'` and `'Synthetic'`:
+
+        >>> assign_wells(repeat_samples, separate_samples_by = 'Phage Library', separate_into = 'plates')
+        # yields a list of DataFrames, one per plate, with one or more plates for 
+        #'Alpaca' and one or more for 'Synthetic'.
+
+        >>> assign_wells(repeat_samples, separate_samples_by = 'io', separate_into = 'plates')
+        # yields a list of DataFrames, with input samples on a different plate 
+        # from output samples.
+
+        >>> assign_wells(repeat_samples, separate_samples_by = 'round', separate_into = 'rows')
+        # yields a list of DataFrames, with samples from different rounds on different rows
+    
+    Parameters
+    ----------
+    repeat_samples : pd.DataFrame
+        samples to repeat; should have columns [separate_samples_by] + sort_by_columns
+    start_wells : list of str, optional
+        for each plate of repeat samples, which well should they start on? if not given, each plate will start on well A1
+    separate_samples_by : str, optional
+        if given, separate samples which have different levels for this column, by default 'Phage Library'
+    separate_into : str, optional
+        how to separate levels of `separate_samples_by`: 
+        - 'plate' (default) to place different levels on different plates; 
+        - 'rows' to place each level on different rows
+        - None to place samples on plate; do not separate by level of `separate_samples_by`. 
+    sort_by_columns : list of str, optional
+        sort the samples by these values, in order; by default ['Phage Library','Expt','Round','Sample']
+    wells : int, optional
+        number of wells in each plate, should be one onf 96, 384; by default 96
+
+    Returns
+    -------
+    list of pd.DataFrame or pd.DataFrame
+        if separate_dataframes_per_plate is False: returns a copy of `df`, augmented with columns 'Well' and 'Plate'.
+        if separate_dataframes_per_plate is True: returns one DataFrame for each generated plate; each comprised of rows of `df`; each DataFrame also has a column 'Well'.
+        
+    """
+
+    n_wells = wells
+    
+
+    separate_by_levels = df[separate_samples_by].unique()
+    separate_groups = [df[df[separate_samples_by] == x].copy() for x in separate_by_levels]
+    
+
+    if start_wells is None: start_wells = ['A1' for r in separate_by_levels]
+
+
+    if separate_into == 'plate':
+        # output_plates = []
+        
+        out = []
+
+        current_plate = 0
+        for i, group in enumerate(separate_groups):
+            plates, wells = zip(*(plates.utils.iterate_wells(len(group), start = start_wells[i], wells=n_wells, plate=True, start_plate=current_plate)))
+            last_plate = max(plates)+1
+
+            group['Well'] = list(wells)
+            group['Plate'] = list(plates)
+
+            out.append(group)
+            current_plate = last_plate
+
+    elif separate_into == 'row':
+
+        current_well = start_wells[0]
+
+        out = []
+        plate = []
+        for i, group in enumerate(separate_groups):
+            plates, wells = zip(*(plates.utils.iterate_wells(len(group), start = current_well, start_plate=current_plate, wells=n_wells, plate=True)))
+            
+            group['Well'] = list(wells)
+            group['Plate'] = list(plates)
+            
+            out.append(group)
+            current_well, current_plate = next_row(current_well, wells=n_wells, plate=True, start_plate=current_plate)
+    else:
+        plates, wells = zip(*(plates.utils.iterate_wells(len(group), start = start_wells[0], start_plate=0, wells=n_wells, plate=True)))
+        group = df
+
+        group['Well'] = list(wells)
+        group['Plate'] = list(plates)
+
+        out = [group]
+    
+    if separate_dataframes_per_plate:
+        out = pd.concat(out)
+        output_plates = []
+        all_plates = out['Plate'].unique()
+        for j in all_plates:
+            output_plates.append(group.loc[group['Plate'] == j,:])
+        return output_plates
+    return pd.concat(out)
