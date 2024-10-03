@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from .utils import *
-from .data import fortify_plate, add_row_column, pivot_plate
+from .data import fortify_plate, add_row_column, pivot_plate, cherrypick
 
 def parse_hue(values, order=None, palette=None):
     import seaborn as sns
